@@ -1,0 +1,42 @@
+syntax = "proto3";
+package staylike.booking;
+
+service BookingService {
+  rpc CreateBooking(CreateBookingReq) returns (BookingResp);
+  rpc CancelBooking(CancelReq) returns (GenericResp);
+  rpc GetBookingsByUser(UserIdReq) returns (BookingsListResp);
+  rpc ValidateBooking(BookingIdReq) returns (GenericResp);
+}
+
+message CreateBookingReq {
+  string userId = 1;
+  string listingId = 2;
+  string checkIn = 3;
+  string checkOut = 4;
+  int32 guests = 5;
+}
+
+message BookingResp {
+  string id = 1;
+  string userId = 2;
+  string listingId = 3;
+  string status = 4;
+  string createdAt = 5;
+  double totalPrice = 6;
+}
+
+message CancelReq {
+  string bookingId = 1;
+  string userId = 2;
+}
+
+message UserIdReq { string userId = 1; }
+
+message BookingsListResp { repeated BookingResp bookings = 1; }
+
+message BookingIdReq { string bookingId = 1; }
+
+message GenericResp {
+  bool ok = 1;
+  string message = 2;
+}

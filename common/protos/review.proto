@@ -1,0 +1,32 @@
+syntax = "proto3";
+package staylike.review;
+
+service ReviewService {
+  rpc AddReview(AddReviewReq) returns (GenericResp);
+  rpc GetReviewsByListing(ListingReq) returns (ReviewsResp);
+}
+
+message AddReviewReq {
+  string userId = 1;
+  string listingId = 2;
+  string bookingId = 3;
+  int32 rating = 4;
+  string comment = 5;
+}
+
+message ListingReq { string listingId = 1; }
+
+message ReviewItem {
+  string id = 1;
+  string userId = 2;
+  int32 rating = 3;
+  string comment = 4;
+  string createdAt = 5;
+}
+
+message ReviewsResp { repeated ReviewItem reviews = 1; }
+
+message GenericResp {
+  bool ok = 1;
+  string message = 2;
+}

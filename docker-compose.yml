@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    env_file: .env
+    environment:
+      - DB_NAME=user-db
+      - GRPC_PORT=50051
+    ports:
+      - '50051:50051'
+    networks:
+      - staylike-net
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    env_file: .env
+    environment:
+      - USER_SERVICE_HOST=user-service
+      - USER_SERVICE_PORT=50051
+      - GRPC_PORT=50050
+    ports:
+      - '50050:50050'
+    depends_on:
+      - user-service
+    networks:
+      - staylike-net
+
+  rooms-service:
+    build:
+      context: .
+      dockerfile: rooms-service/Dockerfile
+    env_file: .env
+    environment:
+      - DB_NAME=rooms-db
+      - GRPC_PORT=50052
+    ports:
+      - '50052:50052'
+    networks:
+      - staylike-net
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: booking-service/Dockerfile
+    env_file: .env
+    environment:
+      - DB_NAME=booking-db
+      - GRPC_PORT=50053
+      - USER_SERVICE_HOST=user-service
+      - USER_SERVICE_PORT=50051
+      - ROOMS_SERVICE_HOST=rooms-service
+      - ROOMS_SERVICE_PORT=50052
+    ports:
+      - '50053:50053'
+    depends_on:
+      - user-service
+      - rooms-service
+    networks:
+      - staylike-net
+
+  review-service:
+    build:
+      context: .
+      dockerfile: review-service/Dockerfile
+    env_file: .env
+    environment:
+      - DB_NAME=review-db
+      - GRPC_PORT=50054
+      - BOOKING_SERVICE_HOST=booking-service
+      - BOOKING_SERVICE_PORT=50053
+    ports:
+      - '50054:50054'
+    depends_on:
+      - booking-service
+    networks:
+      - staylike-net
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    env_file: .env
+    environment:
+      - AUTH_SERVICE_HOST=auth-service
+      - AUTH_SERVICE_PORT=50050
+      - USER_SERVICE_HOST=user-service
+      - USER_SERVICE_PORT=50051
+      - ROOMS_SERVICE_HOST=rooms-service
+      - ROOMS_SERVICE_PORT=50052
+      - BOOKING_SERVICE_HOST=booking-service
+      - BOOKING_SERVICE_PORT=50053
+      - REVIEW_SERVICE_HOST=review-service
+      - REVIEW_SERVICE_PORT=50054
+    ports:
+      - '3000:3000'
+    depends_on:
+      - auth-service
+      - user-service
+      - rooms-service
+      - booking-service
+      - review-service
+    networks:
+      - staylike-net
+
+networks:
+  staylike-net:
+    driver: bridge

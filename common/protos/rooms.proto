@@ -1,0 +1,71 @@
+syntax = "proto3";
+package staylike.rooms;
+
+service RoomsService {
+  rpc CreateListing(CreateListingReq) returns (ListingResp);
+  rpc GetListing(IdReq) returns (ListingResp);
+  rpc SearchListings(SearchReq) returns (SearchResp);
+  rpc CheckAvailability(AvailabilityReq) returns (AvailabilityResp);
+  rpc BlockDates(BlockDatesReq) returns (GenericResp);
+  rpc UnblockDates(UnblockDatesReq) returns (GenericResp);
+}
+
+message IdReq { string id = 1; }
+
+message CreateListingReq {
+  string hostId = 1;
+  string title = 2;
+  string city = 3;
+  string description = 4;
+  double price = 5;
+}
+
+message ListingResp {
+  string id = 1;
+  string hostId = 2;
+  string title = 3;
+  string city = 4;
+  string description = 5;
+  double price = 6;
+}
+
+message SearchReq {
+  string city = 1;
+  string checkIn = 2;
+  string checkOut = 3;
+  int32 guests = 4;
+  int32 page = 5;
+  int32 limit = 6;
+}
+
+message SearchResp {
+  repeated ListingResp listings = 1;
+  int32 total = 2;
+}
+
+message AvailabilityReq {
+  string listingId = 1;
+  string start = 2;
+  string end = 3;
+}
+
+message AvailabilityResp { bool available = 1; }
+
+message BlockDatesReq {
+  string listingId = 1;
+  string start = 2;
+  string end = 3;
+  string reservationId = 4;
+}
+
+message UnblockDatesReq {
+  string listingId = 1;
+  string start = 2;
+  string end = 3;
+  string reservationId = 4;
+}
+
+message GenericResp {
+  bool ok = 1;
+  string message = 2;
+}
