@@ -73,42 +73,120 @@ export class SearchResponseDto {
 // --- Booking DTOs ---
 
 export class CreateBookingDto {
-  @ApiProperty({ example: '507f1f77bcf86cd799439011' })
-  listingId: string;
+  @ApiProperty({ example: '2026-04-15' })
+  reservationDate: string;
 
-  @ApiProperty({ example: '2026-04-01' })
-  checkIn: string;
+  @ApiProperty({ example: '14:00' })
+  checkInTime: string;
 
-  @ApiProperty({ example: '2026-04-05' })
-  checkOut: string;
+  @ApiProperty({ example: '11:00' })
+  checkOutTime: string;
 
   @ApiProperty({ example: 2 })
-  guests: number;
+  memberCount: number;
+
+  @ApiProperty({ example: 'full', enum: ['full', 'half'] })
+  board: string;
+}
+
+export class UpdateBookingDto {
+  @ApiPropertyOptional({ example: '2026-04-20' })
+  reservationDate?: string;
+
+  @ApiPropertyOptional({ example: '15:00' })
+  checkInTime?: string;
+
+  @ApiPropertyOptional({ example: '10:00' })
+  checkOutTime?: string;
+
+  @ApiPropertyOptional({ example: 3 })
+  memberCount?: number;
+
+  @ApiPropertyOptional({ example: 'half', enum: ['full', 'half'] })
+  board?: string;
+}
+
+export class PopulatedUserDto {
+  @ApiProperty() id: string;
+  @ApiProperty() name: string;
+  @ApiProperty() email: string;
+  @ApiProperty() role: string;
+}
+
+export class PopulatedRoomDto {
+  @ApiProperty() id: string;
+  @ApiProperty() title: string;
+  @ApiProperty() city: string;
+  @ApiProperty() description: string;
+  @ApiProperty() price: number;
+}
+
+export class BookingItemDto {
+  @ApiProperty() id: string;
+  @ApiProperty() guestId: string;
+  @ApiProperty() roomId: string;
+  @ApiProperty() hostId: string;
+  @ApiProperty() reservationDate: string;
+  @ApiProperty() checkInTime: string;
+  @ApiProperty() checkOutTime: string;
+  @ApiProperty() memberCount: number;
+  @ApiProperty() board: string;
+  @ApiProperty() createdAt: string;
+  @ApiProperty() updatedAt: string;
+  @ApiPropertyOptional({ type: PopulatedUserDto }) guest?: PopulatedUserDto;
+  @ApiPropertyOptional({ type: PopulatedRoomDto }) room?: PopulatedRoomDto;
+  @ApiPropertyOptional({ type: PopulatedUserDto }) host?: PopulatedUserDto;
 }
 
 export class BookingResponseDto {
-  @ApiProperty() id: string;
-  @ApiProperty() userId: string;
-  @ApiProperty() listingId: string;
-  @ApiProperty() status: string;
-  @ApiProperty() createdAt: string;
-  @ApiProperty() totalPrice: number;
+  @ApiProperty() success: boolean;
+  @ApiProperty() message: string;
+  @ApiProperty({ type: BookingItemDto }) data: BookingItemDto;
+}
+
+export class PaginationDto {
+  @ApiProperty() total: number;
+  @ApiProperty() offset: number;
+  @ApiProperty() limit: number;
 }
 
 export class BookingsListResponseDto {
-  @ApiProperty({ type: [BookingResponseDto] })
-  bookings: BookingResponseDto[];
+  @ApiProperty() success: boolean;
+  @ApiProperty({ type: [BookingItemDto] }) data: BookingItemDto[];
+  @ApiProperty({ type: PaginationDto }) pagination: PaginationDto;
+}
+
+// --- Notification DTOs ---
+
+export class MarkNotificationsReadDto {
+  @ApiProperty({ type: [String], example: ['id1', 'id2'] })
+  notificationIds: string[];
+}
+
+export class DeleteNotificationsDto {
+  @ApiProperty({ type: [String], example: ['id1', 'id2'] })
+  notificationIds: string[];
+}
+
+export class NotificationItemDto {
+  @ApiProperty() id: string;
+  @ApiProperty() type: string;
+  @ApiProperty() userId: string;
+  @ApiProperty() title: string;
+  @ApiProperty() message: string;
+  @ApiProperty() isRead: boolean;
+  @ApiProperty() createdAt: string;
+  @ApiProperty() updatedAt: string;
+}
+
+export class NotificationsListResponseDto {
+  @ApiProperty({ type: [NotificationItemDto] })
+  notifications: NotificationItemDto[];
 }
 
 // --- Review DTOs ---
 
 export class CreateReviewDto {
-  @ApiProperty({ example: '507f1f77bcf86cd799439011' })
-  listingId: string;
-
-  @ApiProperty({ example: '507f1f77bcf86cd799439012' })
-  bookingId: string;
-
   @ApiProperty({ example: 5, minimum: 1, maximum: 5 })
   rating: number;
 
@@ -116,17 +194,60 @@ export class CreateReviewDto {
   comment?: string;
 }
 
+export class UpdateReviewDto {
+  @ApiPropertyOptional({ example: 4, minimum: 1, maximum: 5 })
+  rating?: number;
+
+  @ApiPropertyOptional({ example: 'Updated comment.' })
+  comment?: string;
+}
+
+export class ReviewerDto {
+  @ApiProperty() id: string;
+  @ApiProperty() name: string;
+  @ApiProperty() email: string;
+}
+
+export class ReviewBookingDto {
+  @ApiProperty() id: string;
+  @ApiProperty() guestId: string;
+  @ApiProperty() checkInTime: string;
+  @ApiProperty() checkOutTime: string;
+  @ApiProperty() roomId: string;
+  @ApiProperty() reservationDate: string;
+}
+
+export class ReviewRoomDto {
+  @ApiProperty() id: string;
+  @ApiProperty() title: string;
+  @ApiProperty() city: string;
+  @ApiProperty() price: number;
+}
+
 export class ReviewItemDto {
   @ApiProperty() id: string;
   @ApiProperty() userId: string;
+  @ApiProperty() listingId: string;
+  @ApiProperty() bookingId: string;
   @ApiProperty() rating: number;
   @ApiProperty() comment: string;
   @ApiProperty() createdAt: string;
+  @ApiProperty() updatedAt: string;
+  @ApiPropertyOptional({ type: ReviewerDto }) user?: ReviewerDto;
+  @ApiPropertyOptional({ type: ReviewBookingDto }) booking?: ReviewBookingDto;
+  @ApiPropertyOptional({ type: ReviewRoomDto }) room?: ReviewRoomDto;
+}
+
+export class ReviewResponseDto {
+  @ApiProperty() success: boolean;
+  @ApiProperty() message: string;
+  @ApiProperty({ type: ReviewItemDto }) data: ReviewItemDto;
 }
 
 export class ReviewsListResponseDto {
-  @ApiProperty({ type: [ReviewItemDto] })
-  reviews: ReviewItemDto[];
+  @ApiProperty() success: boolean;
+  @ApiProperty({ type: [ReviewItemDto] }) data: ReviewItemDto[];
+  @ApiProperty({ type: PaginationDto }) pagination: PaginationDto;
 }
 
 // --- Generic DTOs ---

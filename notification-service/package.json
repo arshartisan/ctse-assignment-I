@@ -1,7 +1,7 @@
 {
-  "name": "booking-service",
+  "name": "notification-service",
   "version": "1.0.0",
-  "description": "StayEasy Booking Service - gRPC microservice with PostgreSQL and Kafka",
+  "description": "StayEasy Notification Service - Kafka consumer + gRPC server with MongoDB",
   "scripts": {
     "build": "nest build",
     "start": "nest start",
@@ -16,13 +16,12 @@
     "@nestjs/common": "^10.3.0",
     "@nestjs/core": "^10.3.0",
     "@nestjs/microservices": "^10.3.0",
+    "@nestjs/mongoose": "^10.0.2",
     "@nestjs/platform-express": "^10.3.0",
-    "@nestjs/typeorm": "^10.0.2",
     "kafkajs": "^2.2.4",
-    "pg": "^8.11.3",
+    "mongoose": "^8.1.0",
     "reflect-metadata": "^0.2.1",
-    "rxjs": "^7.8.1",
-    "typeorm": "^0.3.20"
+    "rxjs": "^7.8.1"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.3.0",

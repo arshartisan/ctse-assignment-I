@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   user-service:
     build:
@@ -43,23 +41,117 @@ services:
     networks:
       - staylike-net
 
+  # PostgreSQL for booking-service
+  booking-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: stayeasy_booking
+    ports:
+      - '5432:5432'
+    volumes:
+      - booking-db-data:/var/lib/postgresql/data
+    networks:
+      - staylike-net
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@stayeasy.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - '5050:80'
+    depends_on:
+      - booking-db
+    networks:
+      - staylike-net
+
+  # Kafka with KRaft (no ZooKeeper) — official Apache image
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka-broker
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_LOG4J_LEVEL: WARN
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    ports:
+      - '9092:9092'
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - staylike-net
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=stayeasy-kafka
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+    ports:
+      - '8080:8080'
+    depends_on:
+      - kafka
+    networks:
+      - staylike-net
+
   booking-service:
     build:
       context: .
       dockerfile: booking-service/Dockerfile
     env_file: .env
     environment:
-      - DB_NAME=booking-db
       - GRPC_PORT=50053
       - USER_SERVICE_HOST=user-service
       - USER_SERVICE_PORT=50051
       - ROOMS_SERVICE_HOST=rooms-service
       - ROOMS_SERVICE_PORT=50052
+      - POSTGRES_HOST=booking-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=stayeasy_booking
+      - KAFKA_BROKERS=kafka:9092
     ports:
       - '50053:50053'
     depends_on:
       - user-service
       - rooms-service
+      - booking-db
+      - kafka
+    networks:
+      - staylike-net
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    env_file: .env
+    environment:
+      - DB_NAME=stayease_notification
+      - GRPC_PORT=50055
+      - KAFKA_BROKERS=kafka:9092
+      - KAFKAJS_NO_PARTITIONER_WARNING=1
+    ports:
+      - '50055:50055'
+    depends_on:
+      kafka:
+        condition: service_healthy
     networks:
       - staylike-net
 
@@ -73,10 +165,23 @@ services:
       - GRPC_PORT=50054
       - BOOKING_SERVICE_HOST=booking-service
       - BOOKING_SERVICE_PORT=50053
+      - USER_SERVICE_HOST=user-service
+      - USER_SERVICE_PORT=50051
+      - ROOMS_SERVICE_HOST=rooms-service
+      - ROOMS_SERVICE_PORT=50052
+      - KAFKA_BROKERS=kafka:9092
+      - KAFKAJS_NO_PARTITIONER_WARNING=1
     ports:
       - '50054:50054'
     depends_on:
-      - booking-service
+      kafka:
+        condition: service_healthy
+      booking-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      rooms-service:
+        condition: service_started
     networks:
       - staylike-net
 
@@ -96,6 +201,8 @@ services:
       - BOOKING_SERVICE_PORT=50053
       - REVIEW_SERVICE_HOST=review-service
       - REVIEW_SERVICE_PORT=50054
+      - NOTIFICATION_SERVICE_HOST=notification-service
+      - NOTIFICATION_SERVICE_PORT=50055
     ports:
       - '3000:3000'
     depends_on:
@@ -104,9 +211,14 @@ services:
       - rooms-service
       - booking-service
       - review-service
+      - notification-service
     networks:
       - staylike-net
 
 networks:
   staylike-net:
     driver: bridge
+
+volumes:
+  booking-db-data:
+  kafka-data:

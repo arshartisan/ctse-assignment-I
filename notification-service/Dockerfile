@@ -1,8 +1,8 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY review-service/package*.json ./
+COPY notification-service/package*.json ./
 RUN npm install
-COPY review-service/ .
+COPY notification-service/ .
 RUN npm run build
 
 FROM node:20-alpine
@@ -12,5 +12,5 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 COPY common/protos/ /common/protos/
 
-EXPOSE 50054
+EXPOSE 50055
 CMD ["node", "dist/main"]

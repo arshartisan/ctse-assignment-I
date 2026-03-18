@@ -1,16 +1,15 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { join } from 'path';
-import { Reservation, ReservationSchema } from './reservation.schema';
+import { Booking } from './booking.entity';
 import { BookingService } from './booking.service';
 import { BookingController } from './booking.controller';
+import { KafkaProducerService } from './kafka-producer.service';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: Reservation.name, schema: ReservationSchema },
-    ]),
+    TypeOrmModule.forFeature([Booking]),
     ClientsModule.register([
       {
         name: 'USER_SERVICE',
@@ -39,6 +38,6 @@ import { BookingController } from './booking.controller';
     ]),
   ],
   controllers: [BookingController],
-  providers: [BookingService],
+  providers: [BookingService, KafkaProducerService],
 })
 export class BookingModule {}

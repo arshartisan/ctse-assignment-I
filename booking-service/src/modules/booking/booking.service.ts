@@ -1,19 +1,17 @@
 import { Injectable, OnModuleInit, Inject } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { ClientGrpc } from '@nestjs/microservices';
-import { Model } from 'mongoose';
 import { firstValueFrom, Observable } from 'rxjs';
-import { Reservation, ReservationDocument } from './reservation.schema';
+import { Booking, BoardType } from './booking.entity';
+import { KafkaProducerService } from './kafka-producer.service';
 
 interface UserServiceGrpc {
-  getUserById(data: any): Observable<any>;
+  getUserById(data: { id: string }): Observable<any>;
 }
 
 interface RoomsServiceGrpc {
-  checkAvailability(data: any): Observable<any>;
-  blockDates(data: any): Observable<any>;
-  unblockDates(data: any): Observable<any>;
-  getListing(data: any): Observable<any>;
+  getListing(data: { id: string }): Observable<any>;
 }
 
 @Injectable()
@@ -22,150 +20,255 @@ export class BookingService implements OnModuleInit {
   private roomsService: RoomsServiceGrpc;
 
   constructor(
-    @InjectModel(Reservation.name)
-    private reservationModel: Model<ReservationDocument>,
+    @InjectRepository(Booking)
+    private bookingRepo: Repository<Booking>,
     @Inject('USER_SERVICE') private readonly userClient: ClientGrpc,
     @Inject('ROOMS_SERVICE') private readonly roomsClient: ClientGrpc,
+    private readonly kafka: KafkaProducerService,
   ) {}
 
   onModuleInit() {
-    this.userService =
-      this.userClient.getService<UserServiceGrpc>('UserService');
-    this.roomsService =
-      this.roomsClient.getService<RoomsServiceGrpc>('RoomsService');
+    this.userService = this.userClient.getService<UserServiceGrpc>('UserService');
+    this.roomsService = this.roomsClient.getService<RoomsServiceGrpc>('RoomsService');
   }
+
+  // ---- Populate helpers ----
+
+  private async getUser(id: string) {
+    try {
+      return await firstValueFrom(this.userService.getUserById({ id }));
+    } catch {
+      return null;
+    }
+  }
+
+  private async getRoom(id: string) {
+    try {
+      return await firstValueFrom(this.roomsService.getListing({ id }));
+    } catch {
+      return null;
+    }
+  }
+
+  private async populateBooking(booking: Booking) {
+    const [guest, room, host] = await Promise.all([
+      this.getUser(booking.guestId),
+      this.getRoom(booking.roomId),
+      booking.hostId ? this.getUser(booking.hostId) : Promise.resolve(null),
+    ]);
+
+    return {
+      id: booking.id,
+      guestId: booking.guestId,
+      roomId: booking.roomId,
+      hostId: booking.hostId,
+      reservationDate: booking.reservationDate,
+      checkInTime: booking.checkInTime,
+      checkOutTime: booking.checkOutTime,
+      memberCount: booking.memberCount,
+      board: booking.board,
+      createdAt: booking.createdAt?.toISOString() || '',
+      updatedAt: booking.updatedAt?.toISOString() || '',
+      guest: guest
+        ? { id: guest.id, name: guest.name, email: guest.email, role: guest.role }
+        : null,
+      room: room
+        ? { id: room.id, title: room.title, city: room.city, description: room.description, price: room.price }
+        : null,
+      host: host
+        ? { id: host.id, name: host.name, email: host.email, role: host.role }
+        : null,
+    };
+  }
+
+  // ---- gRPC handlers ----
 
   async createBooking(data: {
-    userId: string;
-    listingId: string;
-    checkIn: string;
-    checkOut: string;
-    guests: number;
+    guestId: string;
+    roomId: string;
+    reservationDate: string;
+    checkInTime: string;
+    checkOutTime: string;
+    memberCount: number;
+    board: string;
   }) {
-    // 1. Validate user exists
+    // Fetch room to get hostId
+    let room: any;
     try {
-      await firstValueFrom(
-        this.userService.getUserById({ id: data.userId }),
-      );
-    } catch (error) {
-      throw new Error('User not found');
+      room = await firstValueFrom(this.roomsService.getListing({ id: data.roomId }));
+    } catch {
+      throw new Error('Room not found');
     }
 
-    // 2. Get listing details for price
-    let listing: any;
-    try {
-      listing = await firstValueFrom(
-        this.roomsService.getListing({ id: data.listingId }),
-      );
-    } catch (error) {
-      throw new Error('Listing not found');
-    }
-
-    // 3. Check availability
-    const availability = await firstValueFrom(
-      this.roomsService.checkAvailability({
-        listingId: data.listingId,
-        start: data.checkIn,
-        end: data.checkOut,
-      }),
-    );
-
-    if (!availability.available) {
-      throw new Error('Listing is not available for the selected dates');
-    }
-
-    // 4. Calculate total price (price per night * number of nights)
-    const checkInDate = new Date(data.checkIn);
-    const checkOutDate = new Date(data.checkOut);
-    const nights = Math.ceil(
-      (checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24),
-    );
-    const totalPrice = listing.price * nights;
-
-    // 5. Save reservation
-    const reservation = new this.reservationModel({
-      userId: data.userId,
-      listingId: data.listingId,
-      hostId: listing.hostId || '',
-      checkIn: data.checkIn,
-      checkOut: data.checkOut,
-      guests: data.guests,
-      status: 'CONFIRMED',
-      totalPrice,
+    const booking = this.bookingRepo.create({
+      guestId: data.guestId,
+      roomId: data.roomId,
+      hostId: room.hostId || '',
+      reservationDate: data.reservationDate,
+      checkInTime: data.checkInTime,
+      checkOutTime: data.checkOutTime,
+      memberCount: data.memberCount || 1,
+      board: (data.board as BoardType) || BoardType.FULL,
     });
-    const saved = await reservation.save();
 
-    // 6. Block dates in rooms-service
-    await firstValueFrom(
-      this.roomsService.blockDates({
-        listingId: data.listingId,
-        start: data.checkIn,
-        end: data.checkOut,
-        reservationId: saved._id.toString(),
-      }),
-    );
+    const saved = await this.bookingRepo.save(booking);
 
-    return this.toBookingResp(saved);
+    // Publish Kafka event
+    this.kafka
+      .publishBookingEvent({
+        type: 'BOOKING_CREATED',
+        bookingId: saved.id,
+        guestId: saved.guestId,
+        roomTitle: room.title || saved.roomId,
+        reservationDate: saved.reservationDate,
+      })
+      .catch(() => {});
+
+    return this.populateBooking(saved);
   }
 
-  async cancelBooking(data: { bookingId: string; userId: string }) {
-    const reservation = await this.reservationModel.findById(data.bookingId);
-    if (!reservation) {
-      return { ok: false, message: 'Booking not found' };
+  async getMyBookings(data: {
+    guestId: string;
+    board?: string;
+    reservationDate?: string;
+    offset?: number;
+    limit?: number;
+  }) {
+    const offset = data.offset || 0;
+    const limit = data.limit || 10;
+
+    const qb = this.bookingRepo
+      .createQueryBuilder('booking')
+      .where('booking.guestId = :guestId', { guestId: data.guestId });
+
+    if (data.board) {
+      qb.andWhere('booking.board = :board', { board: data.board });
     }
-    if (reservation.userId !== data.userId) {
-      return { ok: false, message: 'Unauthorized' };
-    }
-    if (reservation.status === 'CANCELLED') {
-      return { ok: false, message: 'Booking already cancelled' };
+    if (data.reservationDate) {
+      qb.andWhere('booking.reservationDate = :date', { date: data.reservationDate });
     }
 
-    reservation.status = 'CANCELLED';
-    await reservation.save();
+    const [rows, total] = await qb
+      .orderBy('booking.createdAt', 'DESC')
+      .skip(offset)
+      .take(limit)
+      .getManyAndCount();
 
-    // Unblock dates in rooms-service
-    await firstValueFrom(
-      this.roomsService.unblockDates({
-        listingId: reservation.listingId,
-        start: reservation.checkIn,
-        end: reservation.checkOut,
-        reservationId: reservation._id.toString(),
-      }),
-    );
-
-    return { ok: true, message: 'Booking cancelled successfully' };
+    const bookings = await Promise.all(rows.map((b) => this.populateBooking(b)));
+    return { bookings, total, offset, limit };
   }
 
-  async getBookingsByUser(data: { userId: string }) {
-    const reservations = await this.reservationModel
-      .find({ userId: data.userId })
-      .sort({ createdAt: -1 })
-      .exec();
-
-    return {
-      bookings: reservations.map((r) => this.toBookingResp(r)),
-    };
+  async getBookingById(data: { bookingId: string }) {
+    const booking = await this.bookingRepo.findOne({ where: { id: data.bookingId } });
+    if (!booking) throw new Error('Booking not found');
+    return this.populateBooking(booking);
   }
 
+  async updateBooking(data: {
+    bookingId: string;
+    guestId: string;
+    reservationDate?: string;
+    checkInTime?: string;
+    checkOutTime?: string;
+    memberCount?: number;
+    board?: string;
+  }) {
+    const booking = await this.bookingRepo.findOne({ where: { id: data.bookingId } });
+    if (!booking) throw new Error('Booking not found');
+    if (booking.guestId !== data.guestId) throw new Error('Unauthorized');
+
+    if (data.reservationDate !== undefined) booking.reservationDate = data.reservationDate;
+    if (data.checkInTime !== undefined) booking.checkInTime = data.checkInTime;
+    if (data.checkOutTime !== undefined) booking.checkOutTime = data.checkOutTime;
+    if (data.memberCount !== undefined) booking.memberCount = data.memberCount;
+    if (data.board !== undefined) booking.board = data.board as BoardType;
+
+    const updated = await this.bookingRepo.save(booking);
+
+    let roomTitle = updated.roomId;
+    try {
+      const room = await firstValueFrom(this.roomsService.getListing({ id: updated.roomId }));
+      roomTitle = room.title || updated.roomId;
+    } catch {}
+
+    this.kafka
+      .publishBookingEvent({
+        type: 'BOOKING_UPDATED',
+        bookingId: updated.id,
+        guestId: updated.guestId,
+        roomTitle,
+        reservationDate: updated.reservationDate,
+      })
+      .catch(() => {});
+
+    return this.populateBooking(updated);
+  }
+
+  async deleteBooking(data: {
+    bookingId: string;
+    requesterId: string;
+    requesterRole: string;
+  }) {
+    const booking = await this.bookingRepo.findOne({ where: { id: data.bookingId } });
+    if (!booking) return { ok: false, message: 'Booking not found' };
+
+    const isOwner = booking.guestId === data.requesterId;
+    const isAdmin = data.requesterRole === 'admin';
+    if (!isOwner && !isAdmin) return { ok: false, message: 'Unauthorized' };
+
+    let roomTitle = booking.roomId;
+    try {
+      const room = await firstValueFrom(this.roomsService.getListing({ id: booking.roomId }));
+      roomTitle = room.title || booking.roomId;
+    } catch {}
+
+    await this.bookingRepo.remove(booking);
+
+    this.kafka
+      .publishBookingEvent({
+        type: 'BOOKING_DELETED',
+        bookingId: data.bookingId,
+        guestId: booking.guestId,
+        roomTitle,
+        reservationDate: booking.reservationDate,
+      })
+      .catch(() => {});
+
+    return { ok: true, message: 'Booking deleted successfully' };
+  }
+
+  async getAllBookings(data: {
+    board?: string;
+    reservationDate?: string;
+    offset?: number;
+    limit?: number;
+  }) {
+    const offset = data.offset || 0;
+    const limit = data.limit || 10;
+
+    const qb = this.bookingRepo.createQueryBuilder('booking');
+
+    if (data.board) {
+      qb.andWhere('booking.board = :board', { board: data.board });
+    }
+    if (data.reservationDate) {
+      qb.andWhere('booking.reservationDate = :date', { date: data.reservationDate });
+    }
+
+    const [rows, total] = await qb
+      .orderBy('booking.createdAt', 'DESC')
+      .skip(offset)
+      .take(limit)
+      .getManyAndCount();
+
+    const bookings = await Promise.all(rows.map((b) => this.populateBooking(b)));
+    return { bookings, total, offset, limit };
+  }
+
+  // Kept for review-service backward compatibility
   async validateBooking(data: { bookingId: string }) {
-    const reservation = await this.reservationModel.findById(data.bookingId);
-    if (!reservation) {
-      return { ok: false, message: 'Booking not found' };
-    }
-    if (reservation.status !== 'CONFIRMED') {
-      return { ok: false, message: 'Booking is not confirmed' };
-    }
+    const booking = await this.bookingRepo.findOne({ where: { id: data.bookingId } });
+    if (!booking) return { ok: false, message: 'Booking not found' };
     return { ok: true, message: 'Booking is valid' };
-  }
-
-  private toBookingResp(reservation: ReservationDocument) {
-    return {
-      id: reservation._id.toString(),
-      userId: reservation.userId,
-      listingId: reservation.listingId,
-      status: reservation.status,
-      createdAt: (reservation as any).createdAt?.toISOString() || '',
-      totalPrice: reservation.totalPrice,
-    };
   }
 }

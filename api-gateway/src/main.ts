@@ -22,6 +22,7 @@ async function bootstrap() {
     .addTag('Listings', 'Search and manage property listings')
     .addTag('Bookings', 'Create and manage reservations')
     .addTag('Reviews', 'Submit and view reviews')
+    .addTag('Notifications', 'User notification management')
     .addTag('Health', 'Service health check')
     .build();
 

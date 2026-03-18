@@ -2,9 +2,11 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   Req,
   OnModuleInit,
@@ -14,20 +16,37 @@ import {
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom, Observable } from 'rxjs';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { CreateBookingDto, BookingResponseDto, BookingsListResponseDto, GenericResponseDto } from '../../common/dto';
+import { RolesGuard, Roles } from '../../common/guards/roles.guard';
+import {
+  CreateBookingDto,
+  UpdateBookingDto,
+  BookingResponseDto,
+  BookingsListResponseDto,
+  GenericResponseDto,
+} from '../../common/dto';
 
 interface BookingServiceGrpc {
   createBooking(data: any): Observable<any>;
-  cancelBooking(data: any): Observable<any>;
-  getBookingsByUser(data: any): Observable<any>;
+  getMyBookings(data: any): Observable<any>;
+  getBookingById(data: any): Observable<any>;
+  updateBooking(data: any): Observable<any>;
+  deleteBooking(data: any): Observable<any>;
+  getAllBookings(data: any): Observable<any>;
 }
 
 @ApiTags('Bookings')
 @ApiBearerAuth('JWT')
-@UseGuards(JwtAuthGuard)
-@Controller('bookings')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Controller()
 export class BookingsController implements OnModuleInit {
   private bookingService: BookingServiceGrpc;
 
@@ -40,26 +59,32 @@ export class BookingsController implements OnModuleInit {
       this.bookingClient.getService<BookingServiceGrpc>('BookingService');
   }
 
-  @Post()
-  @ApiOperation({ summary: 'Create a new booking' })
+  // POST /bookings/room/:id — Guest: create booking for a room
+  @Post('bookings/room/:id')
+  @Roles('guest')
+  @ApiOperation({ summary: 'Create a booking for a room (Guest)' })
   @ApiBody({ type: CreateBookingDto })
   @ApiResponse({ status: 201, description: 'Booking created', type: BookingResponseDto })
-  @ApiResponse({ status: 400, description: 'Booking failed (unavailable dates, invalid listing, etc.)' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async create(
+  async createBooking(
     @Req() req: any,
+    @Param('id') roomId: string,
     @Body() body: CreateBookingDto,
   ) {
     try {
-      return await firstValueFrom(
+      const data = await firstValueFrom(
         this.bookingService.createBooking({
-          userId: req.user.userId,
-          listingId: body.listingId,
-          checkIn: body.checkIn,
-          checkOut: body.checkOut,
-          guests: body.guests,
+          guestId: req.user.userId,
+          roomId,
+          reservationDate: body.reservationDate,
+          checkInTime: body.checkInTime,
+          checkOutTime: body.checkOutTime,
+          memberCount: body.memberCount,
+          board: body.board,
         }),
       );
+      return { success: true, message: 'Booking created successfully', data };
     } catch (error) {
       throw new HttpException(
         error.message || 'Booking failed',
@@ -68,17 +93,42 @@ export class BookingsController implements OnModuleInit {
     }
   }
 
-  @Get()
-  @ApiOperation({ summary: 'Get all bookings for the authenticated user' })
-  @ApiResponse({ status: 200, description: 'List of user bookings', type: BookingsListResponseDto })
+  // GET /bookings/me — Guest: get own bookings with optional filters + pagination
+  @Get('bookings/me')
+  @Roles('guest')
+  @ApiOperation({ summary: "Get authenticated guest's bookings (Guest)" })
+  @ApiQuery({ name: 'board', required: false, enum: ['full', 'half'] })
+  @ApiQuery({ name: 'reservationDate', required: false, example: '2026-04-15' })
+  @ApiQuery({ name: 'offset', required: false, example: 0 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiResponse({ status: 200, description: 'List of bookings', type: BookingsListResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async list(@Req() req: any) {
+  async getMyBookings(
+    @Req() req: any,
+    @Query('board') board?: string,
+    @Query('reservationDate') reservationDate?: string,
+    @Query('offset') offset?: string,
+    @Query('limit') limit?: string,
+  ) {
     try {
-      return await firstValueFrom(
-        this.bookingService.getBookingsByUser({
-          userId: req.user.userId,
+      const result = await firstValueFrom(
+        this.bookingService.getMyBookings({
+          guestId: req.user.userId,
+          board: board || '',
+          reservationDate: reservationDate || '',
+          offset: offset ? parseInt(offset) : 0,
+          limit: limit ? parseInt(limit) : 10,
         }),
       );
+      return {
+        success: true,
+        data: result.bookings,
+        pagination: {
+          total: result.total,
+          offset: result.offset,
+          limit: result.limit,
+        },
+      };
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to fetch bookings',
@@ -87,23 +137,118 @@ export class BookingsController implements OnModuleInit {
     }
   }
 
-  @Delete(':id')
-  @ApiOperation({ summary: 'Cancel a booking by ID' })
-  @ApiResponse({ status: 200, description: 'Booking cancelled', type: GenericResponseDto })
-  @ApiResponse({ status: 400, description: 'Cancellation failed' })
+  // GET /booking/:id — Guest: get single booking by ID
+  @Get('booking/:id')
+  @Roles('guest')
+  @ApiOperation({ summary: 'Get a booking by ID (Guest)' })
+  @ApiResponse({ status: 200, description: 'Booking details', type: BookingResponseDto })
+  @ApiResponse({ status: 404, description: 'Not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async cancel(@Req() req: any, @Param('id') id: string) {
+  async getBookingById(@Param('id') id: string) {
+    try {
+      const data = await firstValueFrom(
+        this.bookingService.getBookingById({ bookingId: id }),
+      );
+      return { success: true, message: 'Booking retrieved', data };
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Booking not found',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+  }
+
+  // PATCH /booking/:id — Guest: partial update
+  @Patch('booking/:id')
+  @Roles('guest')
+  @ApiOperation({ summary: 'Update a booking (Guest, partial update)' })
+  @ApiBody({ type: UpdateBookingDto })
+  @ApiResponse({ status: 200, description: 'Booking updated', type: BookingResponseDto })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async updateBooking(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: UpdateBookingDto,
+  ) {
+    try {
+      const data = await firstValueFrom(
+        this.bookingService.updateBooking({
+          bookingId: id,
+          guestId: req.user.userId,
+          ...body,
+        }),
+      );
+      return { success: true, message: 'Booking updated successfully', data };
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Update failed',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  // DELETE /booking/:id — Guest (owner) or Admin
+  @Delete('booking/:id')
+  @ApiOperation({ summary: 'Delete a booking (Guest owner or Admin)' })
+  @ApiResponse({ status: 200, description: 'Booking deleted', type: GenericResponseDto })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async deleteBooking(@Req() req: any, @Param('id') id: string) {
     try {
       return await firstValueFrom(
-        this.bookingService.cancelBooking({
+        this.bookingService.deleteBooking({
           bookingId: id,
-          userId: req.user.userId,
+          requesterId: req.user.userId,
+          requesterRole: req.user.role,
         }),
       );
     } catch (error) {
       throw new HttpException(
-        error.message || 'Cancellation failed',
+        error.message || 'Delete failed',
         HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  // GET /bookings/all — Admin: all bookings with filters + pagination
+  @Get('bookings/all')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Get all bookings in the system (Admin)' })
+  @ApiQuery({ name: 'board', required: false, enum: ['full', 'half'] })
+  @ApiQuery({ name: 'reservationDate', required: false, example: '2026-04-15' })
+  @ApiQuery({ name: 'offset', required: false, example: 0 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiResponse({ status: 200, description: 'All bookings', type: BookingsListResponseDto })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  async getAllBookings(
+    @Query('board') board?: string,
+    @Query('reservationDate') reservationDate?: string,
+    @Query('offset') offset?: string,
+    @Query('limit') limit?: string,
+  ) {
+    try {
+      const result = await firstValueFrom(
+        this.bookingService.getAllBookings({
+          board: board || '',
+          reservationDate: reservationDate || '',
+          offset: offset ? parseInt(offset) : 0,
+          limit: limit ? parseInt(limit) : 10,
+        }),
+      );
+      return {
+        success: true,
+        data: result.bookings,
+        pagination: {
+          total: result.total,
+          offset: result.offset,
+          limit: result.limit,
+        },
+      };
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch bookings',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }

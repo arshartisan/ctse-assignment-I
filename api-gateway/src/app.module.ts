@@ -1,11 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ClientsModule, Transport } from '@nestjs/microservices';
 import { JwtModule } from '@nestjs/jwt';
-import { join } from 'path';
 import { AuthGatewayModule } from './modules/auth/auth.module';
 import { ListingsGatewayModule } from './modules/listings/listings.module';
 import { BookingsGatewayModule } from './modules/bookings/bookings.module';
 import { ReviewsGatewayModule } from './modules/reviews/reviews.module';
+import { NotificationsGatewayModule } from './modules/notifications/notifications.module';
 import { HealthController } from './modules/health/health.controller';
 
 @Module({
@@ -18,6 +17,7 @@ import { HealthController } from './modules/health/health.controller';
     ListingsGatewayModule,
     BookingsGatewayModule,
     ReviewsGatewayModule,
+    NotificationsGatewayModule,
   ],
   controllers: [HealthController],
 })

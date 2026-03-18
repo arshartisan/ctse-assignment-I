@@ -7,28 +7,68 @@ export class BookingController {
   constructor(private readonly bookingService: BookingService) {}
 
   @GrpcMethod('BookingService', 'CreateBooking')
-  async createBooking(data: {
-    userId: string;
-    listingId: string;
-    checkIn: string;
-    checkOut: string;
-    guests: number;
+  createBooking(data: {
+    guestId: string;
+    roomId: string;
+    reservationDate: string;
+    checkInTime: string;
+    checkOutTime: string;
+    memberCount: number;
+    board: string;
   }) {
     return this.bookingService.createBooking(data);
   }
 
-  @GrpcMethod('BookingService', 'CancelBooking')
-  async cancelBooking(data: { bookingId: string; userId: string }) {
-    return this.bookingService.cancelBooking(data);
+  @GrpcMethod('BookingService', 'GetMyBookings')
+  getMyBookings(data: {
+    guestId: string;
+    board?: string;
+    reservationDate?: string;
+    offset?: number;
+    limit?: number;
+  }) {
+    return this.bookingService.getMyBookings(data);
   }
 
-  @GrpcMethod('BookingService', 'GetBookingsByUser')
-  async getBookingsByUser(data: { userId: string }) {
-    return this.bookingService.getBookingsByUser(data);
+  @GrpcMethod('BookingService', 'GetBookingById')
+  getBookingById(data: { bookingId: string }) {
+    return this.bookingService.getBookingById(data);
+  }
+
+  @GrpcMethod('BookingService', 'UpdateBooking')
+  updateBooking(data: {
+    bookingId: string;
+    guestId: string;
+    reservationDate?: string;
+    checkInTime?: string;
+    checkOutTime?: string;
+    memberCount?: number;
+    board?: string;
+  }) {
+    return this.bookingService.updateBooking(data);
+  }
+
+  @GrpcMethod('BookingService', 'DeleteBooking')
+  deleteBooking(data: {
+    bookingId: string;
+    requesterId: string;
+    requesterRole: string;
+  }) {
+    return this.bookingService.deleteBooking(data);
+  }
+
+  @GrpcMethod('BookingService', 'GetAllBookings')
+  getAllBookings(data: {
+    board?: string;
+    reservationDate?: string;
+    offset?: number;
+    limit?: number;
+  }) {
+    return this.bookingService.getAllBookings(data);
   }
 
   @GrpcMethod('BookingService', 'ValidateBooking')
-  async validateBooking(data: { bookingId: string }) {
+  validateBooking(data: { bookingId: string }) {
     return this.bookingService.validateBooking(data);
   }
 }
