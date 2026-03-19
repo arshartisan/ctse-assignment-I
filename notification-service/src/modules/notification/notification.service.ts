@@ -53,6 +53,59 @@ export class NotificationService {
     return { ok: true, message: 'Notifications deleted' };
   }
 
+  // ---- Admin methods ----
+
+  async getAllNotifications(data: {
+    page?: number;
+    limit?: number;
+    type?: string;
+  }) {
+    const page = data.page || 1;
+    const limit = data.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const filter: any = {};
+    if (data.type) {
+      filter.type = data.type;
+    }
+
+    const [notifications, total] = await Promise.all([
+      this.notificationModel
+        .find(filter)
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 })
+        .exec(),
+      this.notificationModel.countDocuments(filter),
+    ]);
+
+    return {
+      notifications: notifications.map((n) => this.toProtoItem(n)),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  async retryNotification(data: { id: string }) {
+    const original = await this.notificationModel.findById(data.id);
+    if (!original) {
+      return { ok: false, message: 'Notification not found' };
+    }
+
+    // Re-create the notification (trigger re-delivery)
+    const notification = new this.notificationModel({
+      type: original.type,
+      userId: original.userId,
+      title: `[Retry] ${original.title}`,
+      message: original.message,
+      is_read: false,
+    });
+    await notification.save();
+
+    return { ok: true, message: 'Notification retried successfully' };
+  }
+
   private toProtoItem(n: NotificationDocument) {
     return {
       id: (n as any)._id.toString(),

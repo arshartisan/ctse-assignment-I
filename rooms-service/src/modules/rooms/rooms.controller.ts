@@ -98,4 +98,32 @@ export class RoomsController {
   async healthCheck() {
     return this.roomsService.healthCheck();
   }
+
+  // ---- Admin gRPC handlers ----
+
+  @GrpcMethod('RoomsService', 'SuspendListing')
+  async suspendListing(data: { id: string }) {
+    return this.roomsService.suspendListing(data.id);
+  }
+
+  @GrpcMethod('RoomsService', 'AdminDeleteListing')
+  async adminDeleteListing(data: { id: string }) {
+    return this.roomsService.adminDeleteListing(data.id);
+  }
+
+  @GrpcMethod('RoomsService', 'AdminSearchListings')
+  async adminSearchListings(data: {
+    page?: number;
+    limit?: number;
+    city?: string;
+    status?: string;
+    host?: string;
+  }) {
+    return this.roomsService.adminSearchListings(data);
+  }
+
+  @GrpcMethod('RoomsService', 'GetListingsByHost')
+  async getListingsByHost(data: { hostId: string }) {
+    return this.roomsService.getListingsByHost(data.hostId);
+  }
 }

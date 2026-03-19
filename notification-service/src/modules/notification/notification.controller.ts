@@ -34,6 +34,19 @@ export class NotificationController {
     return this.notificationService.deleteNotifications(data);
   }
 
+  // ---- Admin gRPC handlers ----
+
+  @GrpcMethod('NotificationService', 'GetAllNotifications')
+  getAllNotifications(data: { page?: number; limit?: number; type?: string }) {
+    return this.notificationService.getAllNotifications(data);
+  }
+
+  @GrpcMethod('NotificationService', 'RetryNotification')
+  retryNotification(data: { id: string }) {
+    return this.notificationService.retryNotification(data);
+  }
+
+
   // ---- Kafka consumer (receives booking events from booking-service) ----
 
   @MessagePattern('booking-events')

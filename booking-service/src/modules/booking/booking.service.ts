@@ -271,4 +271,81 @@ export class BookingService implements OnModuleInit {
     if (!booking) return { ok: false, message: 'Booking not found' };
     return { ok: true, message: 'Booking is valid' };
   }
+
+  // ---- Admin methods ----
+
+  async getBookingsByRoom(data: { roomId: string }) {
+    const [rows, total] = await this.bookingRepo.findAndCount({
+      where: { roomId: data.roomId },
+      order: { createdAt: 'DESC' },
+    });
+
+    const bookings = await Promise.all(rows.map((b) => this.populateBooking(b)));
+    return { bookings, total, offset: 0, limit: total };
+  }
+
+  async forceCancelBooking(data: { bookingId: string }) {
+    const booking = await this.bookingRepo.findOne({ where: { id: data.bookingId } });
+    if (!booking) return { ok: false, message: 'Booking not found' };
+
+    let roomTitle = booking.roomId;
+    try {
+      const room = await firstValueFrom(this.roomsService.getListing({ id: booking.roomId }));
+      roomTitle = room.title || booking.roomId;
+    } catch {}
+
+    await this.bookingRepo.remove(booking);
+
+    this.kafka
+      .publishBookingEvent({
+        type: 'BOOKING_DELETED',
+        bookingId: data.bookingId,
+        guestId: booking.guestId,
+        roomTitle,
+        reservationDate: booking.reservationDate,
+      })
+      .catch(() => {});
+
+    return { ok: true, message: 'Booking force-cancelled by admin' };
+  }
+
+  async getBookingStats() {
+    const totalBookings = await this.bookingRepo.count();
+
+    // Monthly reservation counts with revenue from room prices
+    const rawMonthly = await this.bookingRepo
+      .createQueryBuilder('booking')
+      .select("TO_CHAR(booking.createdAt, 'YYYY-MM')", 'month')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy("TO_CHAR(booking.createdAt, 'YYYY-MM')")
+      .orderBy('month', 'DESC')
+      .limit(12)
+      .getRawMany();
+
+    // Calculate revenue per booking by looking up room prices
+    const allBookings = await this.bookingRepo.find();
+    let totalRevenue = 0;
+
+    for (const booking of allBookings) {
+      try {
+        const room = await firstValueFrom(this.roomsService.getListing({ id: booking.roomId }));
+        totalRevenue += room.price || 0;
+      } catch {
+        // Room might be deleted
+      }
+    }
+
+    const monthlyReservations = rawMonthly.map((row) => ({
+      month: row.month,
+      count: parseInt(row.count),
+      revenue: 0, // per-month revenue would need more complex aggregation
+    }));
+
+    return {
+      totalBookings,
+      totalRevenue,
+      cancellationRate: 0, // Would need a deleted bookings log to track this
+      monthlyReservations,
+    };
+  }
 }

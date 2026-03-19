@@ -5,6 +5,7 @@ import { ListingsGatewayModule } from './modules/listings/listings.module';
 import { BookingsGatewayModule } from './modules/bookings/bookings.module';
 import { ReviewsGatewayModule } from './modules/reviews/reviews.module';
 import { NotificationsGatewayModule } from './modules/notifications/notifications.module';
+import { AdminGatewayModule } from './modules/admin/admin.module';
 import { HealthController } from './modules/health/health.controller';
 
 @Module({
@@ -18,7 +19,9 @@ import { HealthController } from './modules/health/health.controller';
     BookingsGatewayModule,
     ReviewsGatewayModule,
     NotificationsGatewayModule,
+    AdminGatewayModule,
   ],
   controllers: [HealthController],
 })
 export class AppModule {}
+

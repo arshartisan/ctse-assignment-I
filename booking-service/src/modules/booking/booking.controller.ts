@@ -71,4 +71,21 @@ export class BookingController {
   validateBooking(data: { bookingId: string }) {
     return this.bookingService.validateBooking(data);
   }
+
+  // ---- Admin gRPC handlers ----
+
+  @GrpcMethod('BookingService', 'GetBookingsByRoom')
+  getBookingsByRoom(data: { roomId: string }) {
+    return this.bookingService.getBookingsByRoom(data);
+  }
+
+  @GrpcMethod('BookingService', 'ForceCancelBooking')
+  forceCancelBooking(data: { bookingId: string }) {
+    return this.bookingService.forceCancelBooking(data);
+  }
+
+  @GrpcMethod('BookingService', 'GetBookingStats')
+  getBookingStats() {
+    return this.bookingService.getBookingStats();
+  }
 }

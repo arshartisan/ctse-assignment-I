@@ -240,6 +240,70 @@ export class RoomsService {
     };
   }
 
+  // ---- Admin methods ----
+
+  async suspendListing(id: string) {
+    const listing = await this.listingModel.findById(id);
+    if (!listing) {
+      throw new Error('Listing not found');
+    }
+    listing.active = !listing.active;
+    const saved = await listing.save();
+    return this.toListingResp(saved);
+  }
+
+  async adminDeleteListing(id: string) {
+    const listing = await this.listingModel.findById(id);
+    if (!listing) {
+      return { ok: false, message: 'Listing not found' };
+    }
+    await this.listingModel.findByIdAndDelete(id);
+    return { ok: true, message: 'Listing deleted by admin' };
+  }
+
+  async adminSearchListings(data: {
+    page?: number;
+    limit?: number;
+    city?: string;
+    status?: string;
+    host?: string;
+  }) {
+    const page = data.page || 1;
+    const limit = data.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const filter: any = {};
+    if (data.city) {
+      filter.city = { $regex: data.city, $options: 'i' };
+    }
+    if (data.status === 'active') {
+      filter.active = true;
+    } else if (data.status === 'suspended') {
+      filter.active = false;
+    }
+    if (data.host) {
+      filter.hostId = data.host;
+    }
+
+    const [listings, total] = await Promise.all([
+      this.listingModel.find(filter).skip(skip).limit(limit).sort({ createdAt: -1 }).exec(),
+      this.listingModel.countDocuments(filter),
+    ]);
+
+    return {
+      listings: listings.map((l) => this.toListingResp(l)),
+      total,
+    };
+  }
+
+  async getListingsByHost(hostId: string) {
+    const listings = await this.listingModel.find({ hostId }).exec();
+    return {
+      listings: listings.map((l) => this.toListingResp(l)),
+      total: listings.length,
+    };
+  }
+
   private toListingResp(listing: ListingDocument) {
     return {
       id: listing._id.toString(),

@@ -5,6 +5,10 @@ service NotificationService {
   rpc GetUserNotifications(GetUserNotificationsReq) returns (NotificationsResp);
   rpc MarkNotificationsRead(MarkReadReq) returns (GenericResp);
   rpc DeleteNotifications(DeleteNotificationsReq) returns (GenericResp);
+
+  // Admin RPCs
+  rpc GetAllNotifications(GetAllNotificationsReq) returns (NotificationsPageResp);
+  rpc RetryNotification(NotificationIdReq) returns (GenericResp);
 }
 
 message GetUserNotificationsReq {
@@ -40,3 +44,20 @@ message GenericResp {
   bool ok = 1;
   string message = 2;
 }
+
+// Admin messages
+message GetAllNotificationsReq {
+  int32 page = 1;
+  int32 limit = 2;
+  string type = 3;
+}
+
+message NotificationsPageResp {
+  repeated NotificationItem notifications = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}
+
+message NotificationIdReq { string id = 1; }
+

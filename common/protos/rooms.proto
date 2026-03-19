@@ -13,6 +13,12 @@ service RoomsService {
   rpc UnblockDates(UnblockDatesReq) returns (GenericResp);
   rpc GetRoomCount(Empty) returns (RoomCountResp);
   rpc HealthCheck(Empty) returns (HealthResp);
+
+  // Admin RPCs
+  rpc SuspendListing(IdReq) returns (ListingResp);
+  rpc AdminDeleteListing(IdReq) returns (GenericResp);
+  rpc AdminSearchListings(AdminSearchReq) returns (SearchResp);
+  rpc GetListingsByHost(HostIdReq) returns (HostListingsResp);
 }
 
 message Empty {}
@@ -123,3 +129,20 @@ message HealthResp {
   string service = 2;
   string timestamp = 3;
 }
+
+// Admin messages
+message AdminSearchReq {
+  int32 page = 1;
+  int32 limit = 2;
+  string city = 3;
+  string status = 4;
+  string host = 5;
+}
+
+message HostIdReq { string hostId = 1; }
+
+message HostListingsResp {
+  repeated ListingResp listings = 1;
+  int32 total = 2;
+}
+

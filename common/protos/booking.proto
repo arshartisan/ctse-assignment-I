@@ -12,6 +12,11 @@ service BookingService {
 
   // Kept for backward compatibility (review-service)
   rpc ValidateBooking(BookingIdReq) returns (GenericResp);
+
+  // Admin RPCs
+  rpc GetBookingsByRoom(RoomIdReq) returns (BookingsPageResp);
+  rpc ForceCancelBooking(BookingIdReq) returns (GenericResp);
+  rpc GetBookingStats(Empty) returns (BookingStatsResp);
 }
 
 // ---- Request messages ----
@@ -104,3 +109,21 @@ message GenericResp {
   bool ok = 1;
   string message = 2;
 }
+
+// Admin messages
+message Empty {}
+message RoomIdReq { string roomId = 1; }
+
+message MonthlyCount {
+  string month = 1;
+  int32 count = 2;
+  double revenue = 3;
+}
+
+message BookingStatsResp {
+  int32 totalBookings = 1;
+  double totalRevenue = 2;
+  double cancellationRate = 3;
+  repeated MonthlyCount monthlyReservations = 4;
+}
+
