@@ -91,29 +91,40 @@ export class NotificationController {
     const parsed = this.parseMessage(message);
     this.logger.log(`review-events received: ${JSON.stringify(parsed)}`);
 
-    // NestJS ClientKafka wraps payload as { eventType, reviewData, hostId, timestamp }
-    const { eventType, reviewData, hostId } = parsed;
-
-    if (!hostId) {
-      this.logger.warn(`review-events [${eventType}] skipped — hostId missing`);
-      return;
-    }
+    // NestJS ClientKafka wraps payload as { eventType, reviewData, hostId, guestId, timestamp }
+    const { eventType, reviewData, hostId, guestId } = parsed;
 
     const { userName, listingId, rating, comment } = reviewData || {};
 
     let title: string;
     let body: string;
+    let recipientId: string;
 
     switch (eventType) {
       case 'reviews.created':
-        title = 'New Review Received';
-        body = `New review received from ${userName || 'a guest'}: ${rating}⭐ - ${comment || '(no comment)'}`;
+        if (!guestId) {
+          this.logger.warn(`review-events [${eventType}] skipped — guestId missing`);
+          return;
+        }
+        recipientId = guestId;
+        title = 'Review Submitted';
+        body = `Your review (${rating}⭐ - ${comment || '(no comment)'}) has been submitted successfully.`;
         break;
       case 'reviews.updated':
+        if (!hostId) {
+          this.logger.warn(`review-events [${eventType}] skipped — hostId missing`);
+          return;
+        }
+        recipientId = hostId;
         title = 'Review Updated';
         body = `Review updated by ${userName || 'a guest'}: ${rating}⭐ - ${comment || '(no comment)'}`;
         break;
       case 'reviews.deleted':
+        if (!hostId) {
+          this.logger.warn(`review-events [${eventType}] skipped — hostId missing`);
+          return;
+        }
+        recipientId = hostId;
         title = 'Review Removed';
         body = `A review has been removed from listing ${listingId}`;
         break;
@@ -124,10 +135,10 @@ export class NotificationController {
 
     await this.notificationService.createNotification({
       type: NotificationType.PRIVATE,
-      userId: hostId,
+      userId: recipientId,
       title,
       message: body,
     });
-    this.logger.log(`Notification created for host ${hostId} [${eventType}]`);
+    this.logger.log(`Notification created for user ${recipientId} [${eventType}]`);
   }
 }

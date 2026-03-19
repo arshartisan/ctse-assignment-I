@@ -55,9 +55,9 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
 
   // ---- Helpers ----
 
-  private emitEvent(eventType: string, reviewData: Record<string, any>, hostId: string) {
-    const payload = { eventType, reviewData, hostId, timestamp: new Date().toISOString() };
-    this.logger.log(`Publishing Kafka event: ${eventType} hostId=${hostId}`);
+  private emitEvent(eventType: string, reviewData: Record<string, any>, hostId: string, guestId?: string) {
+    const payload = { eventType, reviewData, hostId, guestId, timestamp: new Date().toISOString() };
+    this.logger.log(`Publishing Kafka event: ${eventType} hostId=${hostId} guestId=${guestId}`);
     this.kafkaClient.emit('review-events', payload).subscribe({
       error: (err) => this.logger.error(`Kafka emit failed [${eventType}]: ${err.message}`),
     });
@@ -157,6 +157,7 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
     const saved = await review.save();
     const populated = await this.populateReview(saved);
 
+    const guestId = populated.booking?.guestId || populated.userId;
     this.emitEvent('reviews.created', {
       reviewId: populated.id,
       userId: populated.userId,
@@ -165,7 +166,7 @@ export class ReviewService implements OnModuleInit, OnModuleDestroy {
       rating: populated.rating,
       comment: populated.comment,
       createdAt: populated.createdAt,
-    }, populated.hostId);
+    }, populated.hostId, guestId);
 
     return populated;
   }
