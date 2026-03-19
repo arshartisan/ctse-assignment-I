@@ -38,6 +38,9 @@ export class Listing {
   @Prop({ default: [] })
   images: string[];
 
+  @Prop({ default: 1 })
+  maxGuests: number;
+
   @Prop({ default: true })
   active: boolean;
 

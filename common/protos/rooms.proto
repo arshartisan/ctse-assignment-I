@@ -4,11 +4,18 @@ package staylike.rooms;
 service RoomsService {
   rpc CreateListing(CreateListingReq) returns (ListingResp);
   rpc GetListing(IdReq) returns (ListingResp);
+  rpc UpdateListing(UpdateListingReq) returns (ListingResp);
+  rpc DeleteListing(DeleteListingReq) returns (GenericResp);
   rpc SearchListings(SearchReq) returns (SearchResp);
   rpc CheckAvailability(AvailabilityReq) returns (AvailabilityResp);
+  rpc GetAvailability(IdReq) returns (GetAvailabilityResp);
   rpc BlockDates(BlockDatesReq) returns (GenericResp);
   rpc UnblockDates(UnblockDatesReq) returns (GenericResp);
+  rpc GetRoomCount(Empty) returns (RoomCountResp);
+  rpc HealthCheck(Empty) returns (HealthResp);
 }
+
+message Empty {}
 
 message IdReq { string id = 1; }
 
@@ -18,6 +25,22 @@ message CreateListingReq {
   string city = 3;
   string description = 4;
   double price = 5;
+  int32 maxGuests = 6;
+}
+
+message UpdateListingReq {
+  string id = 1;
+  string hostId = 2;
+  string title = 3;
+  string city = 4;
+  string description = 5;
+  double price = 6;
+  int32 maxGuests = 7;
+}
+
+message DeleteListingReq {
+  string id = 1;
+  string hostId = 2;
 }
 
 message ListingResp {
@@ -27,6 +50,9 @@ message ListingResp {
   string city = 4;
   string description = 5;
   double price = 6;
+  int32 maxGuests = 7;
+  repeated string images = 8;
+  bool active = 9;
 }
 
 message SearchReq {
@@ -36,6 +62,8 @@ message SearchReq {
   int32 guests = 4;
   int32 page = 5;
   int32 limit = 6;
+  double minPrice = 7;
+  double maxPrice = 8;
 }
 
 message SearchResp {
@@ -50,6 +78,16 @@ message AvailabilityReq {
 }
 
 message AvailabilityResp { bool available = 1; }
+
+message BlockedDateRange {
+  string start = 1;
+  string end = 2;
+  string reservationId = 3;
+}
+
+message GetAvailabilityResp {
+  repeated BlockedDateRange blockedDates = 1;
+}
 
 message BlockDatesReq {
   string listingId = 1;
@@ -68,4 +106,20 @@ message UnblockDatesReq {
 message GenericResp {
   bool ok = 1;
   string message = 2;
+}
+
+message CityCount {
+  string city = 1;
+  int32 count = 2;
+}
+
+message RoomCountResp {
+  int32 total = 1;
+  repeated CityCount byCity = 2;
+}
+
+message HealthResp {
+  string status = 1;
+  string service = 2;
+  string timestamp = 3;
 }

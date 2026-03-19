@@ -15,8 +15,12 @@ export class RoomsService {
     city: string;
     description: string;
     price: number;
+    maxGuests?: number;
   }) {
-    const listing = new this.listingModel(data);
+    const listing = new this.listingModel({
+      ...data,
+      maxGuests: data.maxGuests || 1,
+    });
     const saved = await listing.save();
     return this.toListingResp(saved);
   }
@@ -29,6 +33,51 @@ export class RoomsService {
     return this.toListingResp(listing);
   }
 
+  async updateListing(data: {
+    id: string;
+    hostId: string;
+    title?: string;
+    city?: string;
+    description?: string;
+    price?: number;
+    maxGuests?: number;
+  }) {
+    const listing = await this.listingModel.findById(data.id);
+    if (!listing) {
+      throw new Error('Listing not found');
+    }
+    if (listing.hostId !== data.hostId) {
+      throw new Error('Forbidden: you do not own this listing');
+    }
+
+    const updateFields: any = {};
+    if (data.title) updateFields.title = data.title;
+    if (data.city) updateFields.city = data.city;
+    if (data.description !== undefined) updateFields.description = data.description;
+    if (data.price) updateFields.price = data.price;
+    if (data.maxGuests) updateFields.maxGuests = data.maxGuests;
+
+    const updated = await this.listingModel.findByIdAndUpdate(
+      data.id,
+      { $set: updateFields },
+      { new: true },
+    );
+    return this.toListingResp(updated);
+  }
+
+  async deleteListing(data: { id: string; hostId: string }) {
+    const listing = await this.listingModel.findById(data.id);
+    if (!listing) {
+      throw new Error('Listing not found');
+    }
+    if (listing.hostId !== data.hostId) {
+      throw new Error('Forbidden: you do not own this listing');
+    }
+
+    await this.listingModel.findByIdAndDelete(data.id);
+    return { ok: true, message: 'Listing deleted successfully' };
+  }
+
   async searchListings(data: {
     city?: string;
     checkIn?: string;
@@ -36,12 +85,26 @@ export class RoomsService {
     guests?: number;
     page?: number;
     limit?: number;
+    minPrice?: number;
+    maxPrice?: number;
   }) {
-    const { city, checkIn, checkOut, page = 1, limit = 10 } = data;
+    const { city, checkIn, checkOut, guests, page = 1, limit = 10, minPrice, maxPrice } = data;
 
     const filter: any = { active: true };
     if (city) {
       filter.city = { $regex: city, $options: 'i' };
+    }
+
+    // Price range filtering
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) filter.price.$gte = minPrice;
+      if (maxPrice) filter.price.$lte = maxPrice;
+    }
+
+    // Guest capacity filtering
+    if (guests && guests > 0) {
+      filter.maxGuests = { $gte: guests };
     }
 
     // If date range provided, exclude listings with overlapping blocked dates
@@ -92,6 +155,21 @@ export class RoomsService {
     return { available: !hasConflict };
   }
 
+  async getAvailability(id: string) {
+    const listing = await this.listingModel.findById(id);
+    if (!listing) {
+      throw new Error('Listing not found');
+    }
+
+    const blockedDates = listing.blockedDates.map((bd) => ({
+      start: new Date(bd.start).toISOString(),
+      end: new Date(bd.end).toISOString(),
+      reservationId: bd.reservationId || '',
+    }));
+
+    return { blockedDates };
+  }
+
   async blockDates(data: {
     listingId: string;
     start: string;
@@ -140,6 +218,28 @@ export class RoomsService {
     return { ok: true, message: 'Dates unblocked successfully' };
   }
 
+  async getRoomCount() {
+    const [total, byCity] = await Promise.all([
+      this.listingModel.countDocuments({ active: true }),
+      this.listingModel.aggregate([
+        { $match: { active: true } },
+        { $group: { _id: '$city', count: { $sum: 1 } } },
+        { $project: { city: '$_id', count: 1, _id: 0 } },
+        { $sort: { count: -1 } },
+      ]),
+    ]);
+
+    return { total, byCity };
+  }
+
+  async healthCheck() {
+    return {
+      status: 'ok',
+      service: 'rooms-service',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   private toListingResp(listing: ListingDocument) {
     return {
       id: listing._id.toString(),
@@ -148,6 +248,9 @@ export class RoomsService {
       city: listing.city,
       description: listing.description || '',
       price: listing.price,
+      maxGuests: listing.maxGuests || 1,
+      images: listing.images || [],
+      active: listing.active,
     };
   }
 }

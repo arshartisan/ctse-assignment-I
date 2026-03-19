@@ -13,6 +13,7 @@ export class RoomsController {
     city: string;
     description: string;
     price: number;
+    maxGuests?: number;
   }) {
     return this.roomsService.createListing(data);
   }
@@ -20,6 +21,24 @@ export class RoomsController {
   @GrpcMethod('RoomsService', 'GetListing')
   async getListing(data: { id: string }) {
     return this.roomsService.getListing(data.id);
+  }
+
+  @GrpcMethod('RoomsService', 'UpdateListing')
+  async updateListing(data: {
+    id: string;
+    hostId: string;
+    title?: string;
+    city?: string;
+    description?: string;
+    price?: number;
+    maxGuests?: number;
+  }) {
+    return this.roomsService.updateListing(data);
+  }
+
+  @GrpcMethod('RoomsService', 'DeleteListing')
+  async deleteListing(data: { id: string; hostId: string }) {
+    return this.roomsService.deleteListing(data);
   }
 
   @GrpcMethod('RoomsService', 'SearchListings')
@@ -30,6 +49,8 @@ export class RoomsController {
     guests?: number;
     page?: number;
     limit?: number;
+    minPrice?: number;
+    maxPrice?: number;
   }) {
     return this.roomsService.searchListings(data);
   }
@@ -41,6 +62,11 @@ export class RoomsController {
     end: string;
   }) {
     return this.roomsService.checkAvailability(data);
+  }
+
+  @GrpcMethod('RoomsService', 'GetAvailability')
+  async getAvailability(data: { id: string }) {
+    return this.roomsService.getAvailability(data.id);
   }
 
   @GrpcMethod('RoomsService', 'BlockDates')
@@ -61,5 +87,15 @@ export class RoomsController {
     reservationId: string;
   }) {
     return this.roomsService.unblockDates(data);
+  }
+
+  @GrpcMethod('RoomsService', 'GetRoomCount')
+  async getRoomCount() {
+    return this.roomsService.getRoomCount();
+  }
+
+  @GrpcMethod('RoomsService', 'HealthCheck')
+  async healthCheck() {
+    return this.roomsService.healthCheck();
   }
 }

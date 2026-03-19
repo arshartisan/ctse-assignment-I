@@ -52,6 +52,26 @@ export class CreateListingDto {
 
   @ApiProperty({ example: 150 })
   price: number;
+
+  @ApiPropertyOptional({ example: 2 })
+  maxGuests?: number;
+}
+
+export class UpdateListingDto {
+  @ApiPropertyOptional({ example: 'Updated Beach House' })
+  title?: string;
+
+  @ApiPropertyOptional({ example: 'Kandy' })
+  city?: string;
+
+  @ApiPropertyOptional({ example: 'Updated description' })
+  description?: string;
+
+  @ApiPropertyOptional({ example: 200 })
+  price?: number;
+
+  @ApiPropertyOptional({ example: 4 })
+  maxGuests?: number;
 }
 
 export class ListingResponseDto {
@@ -61,6 +81,9 @@ export class ListingResponseDto {
   @ApiProperty() city: string;
   @ApiProperty() description: string;
   @ApiProperty() price: number;
+  @ApiProperty() maxGuests: number;
+  @ApiProperty({ type: [String] }) images: string[];
+  @ApiProperty() active: boolean;
 }
 
 export class SearchResponseDto {
@@ -68,6 +91,27 @@ export class SearchResponseDto {
   listings: ListingResponseDto[];
 
   @ApiProperty() total: number;
+}
+
+export class BlockedDateDto {
+  @ApiProperty() start: string;
+  @ApiProperty() end: string;
+  @ApiProperty() reservationId: string;
+}
+
+export class AvailabilityResponseDto {
+  @ApiProperty({ type: [BlockedDateDto] })
+  blockedDates: BlockedDateDto[];
+}
+
+export class CityCountDto {
+  @ApiProperty() city: string;
+  @ApiProperty() count: number;
+}
+
+export class RoomCountResponseDto {
+  @ApiProperty() total: number;
+  @ApiProperty({ type: [CityCountDto] }) byCity: CityCountDto[];
 }
 
 // --- Booking DTOs ---
